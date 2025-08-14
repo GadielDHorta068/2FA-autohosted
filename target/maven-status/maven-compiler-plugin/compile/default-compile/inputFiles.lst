@@ -1,0 +1,13 @@
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/dto/Verify2FAResponse.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/service/TwoFactorAuthService.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/Application.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/entity/User.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/entity/RecoveryCode.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/config/OpenApiConfig.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/dto/Verify2FARequest.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/dto/Enable2FAResponse.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/controller/TwoFactorAuthController.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/repository/RecoveryCodeRepository.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/dto/Enable2FARequest.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/service/EncryptionService.java
+/home/deneb/Documentos/2FA/src/main/java/com/argy/twofactorauth/repository/UserRepository.java
