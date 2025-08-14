@@ -109,3 +109,83 @@ spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQL10Dialec
 - Mantén `ENCRYPTION_KEY` fuera del repositorio (variables de entorno/secret manager).
 - Considera añadir rate limiting y protección anti-brute force en `/verify`.
 - Para producción, añade auditoría/observabilidad (logs estructurados, métricas). 
+
+## Despliegue a producción (PostgreSQL)
+
+### 1) Preparar base de datos
+```bash
+sudo -u postgres psql -c "CREATE DATABASE twofactorauth;"
+sudo -u postgres psql -c "CREATE USER twofa WITH ENCRYPTED PASSWORD 'tu_password_segura';"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE twofactorauth TO twofa;"
+```
+
+### 2) Perfil de producción
+Crea `src/main/resources/application-prod.properties`:
+```properties
+server.port=8080
+
+spring.datasource.url=jdbc:postgresql://localhost:5432/twofactorauth
+spring.datasource.username=twofa
+spring.datasource.password=tu_password_segura
+spring.datasource.hikari.maximum-pool-size=10
+
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQL10Dialect
+spring.jpa.open-in-view=false
+
+# Deshabilitar herramientas de dev
+spring.h2.console.enabled=false
+springdoc.api-docs.enabled=false
+springdoc.swagger-ui.enabled=false
+
+# Clave AES (no la hardcodees; usa secret/variable de entorno)
+encryption.key=${ENCRYPTION_KEY}
+```
+
+### 3) Seguridad mínima (recomendado)
+Crea `src/main/java/com/argy/twofactorauth/config/SecurityConfig.java`:
+```java
+package com.argy.twofactorauth.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+public class SecurityConfig {
+	@Bean
+	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+		http
+			.csrf().disable()
+			.authorizeRequests()
+			.antMatchers("/api/2fa/**").permitAll()
+			.anyRequest().denyAll();
+		return http.build();
+	}
+}
+```
+Ajusta las reglas según tus necesidades (CORS, CSRF, authn/authz, rate limiting, etc.).
+
+### 4) Construir artefacto
+```bash
+mvn clean package -DskipTests
+```
+
+### 5) Ejecutar con perfil prod
+```bash
+export SPRING_PROFILES_ACTIVE=prod
+export ENCRYPTION_KEY='cambia_esta_clave_de_16_chars'
+java -jar target/twofactorauth-0.0.1-SNAPSHOT.jar
+```
+
+### 6) Verificación rápida
+- POST `http://<host>:8080/api/2fa/enable` con `{ "username": "demo" }` → 200 y devuelve `qrCode`/`recoveryCodes`.
+- POST `http://<host>:8080/api/2fa/verify` con `{ "username": "demo", "code": "123456" }` → `{ "verified": true|false }`.
+
+### Recomendaciones de producción
+- Usa migraciones (Flyway/Liquibase) en lugar de `ddl-auto`.
+- Gestiona `ENCRYPTION_KEY` en un secret manager (no en archivos).
+- No expongas `/h2-console`; si usas Swagger en prod, protégelo.
+- Añade observabilidad (logs estructurados, métricas, tracing) y un proxy con HTTPS (Nginx/Caddy).
+- Backup/rotación de clave: cambiar `ENCRYPTION_KEY` invalida secretos previamente cifrados; planifica migración/rotación. 
