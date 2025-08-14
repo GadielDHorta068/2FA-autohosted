@@ -1,3 +1,7 @@
+/**
+ * Repositorio de usuarios.
+ * Incluye método de consulta por username.
+ */
 package com.argy.twofactorauth.repository;
 
 import com.argy.twofactorauth.entity.User;

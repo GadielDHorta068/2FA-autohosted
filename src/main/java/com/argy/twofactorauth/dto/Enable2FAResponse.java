@@ -1,3 +1,9 @@
+/**
+ * Respuesta de habilitación de 2FA.
+ * Incluye:
+ * - qrCode: data URI de imagen PNG para escanear en la app TOTP
+ * - recoveryCodes: lista de códigos de recuperación en claro (mostrar una sola vez)
+ */
 package com.argy.twofactorauth.dto;
 
 import java.util.List;

@@ -1,3 +1,11 @@
+/**
+ * Servicio de negocio para habilitar y verificar 2FA (TOTP).
+ *
+ * Responsabilidades:
+ * - Generar secreto TOTP y QR (data URI) usando la librería dev.samstevens.totp
+ * - Generar y almacenar códigos de recuperación asociados al usuario
+ * - Verificar códigos TOTP recibidos contra el secreto cifrado
+ */
 package com.argy.twofactorauth.service;
 
 import com.argy.twofactorauth.dto.Enable2FARequest;
@@ -41,6 +49,12 @@ public class TwoFactorAuthService {
 		this.encryptionService = encryptionService;
 	}
 
+	/**
+	 * Habilita 2FA para el usuario (crea secreto, QR y códigos de recuperación, persiste en DB).
+	 * @param request contiene el username
+	 * @return data URI del QR y lista de códigos de recuperación en claro (solo en la respuesta)
+	 * @throws Exception en caso de errores de cifrado o generación de QR
+	 */
 	public Enable2FAResponse enable2FA(Enable2FARequest request) throws Exception {
 		String secret = secretGenerator.generate();
 		User foundUser = userRepository.findByUsername(request.getUsername());
@@ -76,6 +90,12 @@ public class TwoFactorAuthService {
 		return new Enable2FAResponse(qrCode, Arrays.asList(recoveryCodes));
 	}
 
+	/**
+	 * Verifica un código TOTP para el username dado.
+	 * @param request contiene username y code (6 dígitos)
+	 * @return resultado booleano de verificación
+	 * @throws Exception si falla el descifrado del secreto
+	 */
 	public Verify2FAResponse verify2FA(Verify2FARequest request) throws Exception {
 		User user = userRepository.findByUsername(request.getUsername());
 		if (user == null || user.getSecret() == null) {

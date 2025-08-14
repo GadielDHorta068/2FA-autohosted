@@ -1,3 +1,6 @@
+/**
+ * Repositorio de códigos de recuperación.
+ */
 package com.argy.twofactorauth.repository;
 
 import com.argy.twofactorauth.entity.RecoveryCode;

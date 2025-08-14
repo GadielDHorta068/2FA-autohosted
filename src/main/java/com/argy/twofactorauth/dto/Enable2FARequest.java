@@ -1,3 +1,8 @@
+/**
+ * Petición para habilitar 2FA.
+ * Campos:
+ * - username: identificador del usuario para el que se habilita 2FA.
+ */
 package com.argy.twofactorauth.dto;
 
 import lombok.Data;

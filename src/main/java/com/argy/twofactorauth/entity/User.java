@@ -1,3 +1,9 @@
+/**
+ * Entidad de usuario con credenciales 2FA:
+ * - username: identificador único
+ * - secret: secreto TOTP cifrado (AES)
+ * - recoveryCodes: códigos de recuperación cifrados
+ */
 package com.argy.twofactorauth.entity;
 
 import javax.persistence.*;

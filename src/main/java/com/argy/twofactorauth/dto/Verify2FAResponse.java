@@ -1,3 +1,7 @@
+/**
+ * Respuesta de verificación de 2FA.
+ * - verified: indica si el código TOTP es válido en la ventana de tiempo actual
+ */
 package com.argy.twofactorauth.dto;
 
 import lombok.Data;
