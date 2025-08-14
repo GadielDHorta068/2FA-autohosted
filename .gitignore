@@ -1,0 +1,33 @@
+# Compilados/Build
+/target/
+*/target/
+
+# Logs
+*.log
+/logs/
+/app.log
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+.vscode/
+
+# SO / Misc
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Entorno/Secretos
+.env
+*.env
+
+# Maven
+.mvn/timing.properties
+# (normalmente se versiona el wrapper jar)
+# .mvn/wrapper/maven-wrapper.jar 
