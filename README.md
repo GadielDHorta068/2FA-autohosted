@@ -1,191 +1,94 @@
-# twofactorauth (2FA API con Spring Boot)
+## twofactorauth (API 2FA con Spring Boot)
 
-API REST para habilitar y verificar 2FA (TOTP) con generación de QR y códigos de recuperación.
+API REST para habilitar/verificar 2FA (TOTP), generación de QR y gestión de códigos de recuperación (hashed). No requiere frontend: es solo API.
 
-## Tecnologías
-- Java 11+
-- Spring Boot 2.7.x
-- Spring Web, Spring Data JPA
+### Stack
+- Java 11+ (runtime 17 en Docker)
+- Spring Boot 2.7.x (Web, Data JPA, Security, Validation, Actuator)
 - H2 (dev) / PostgreSQL (prod)
-- totp-spring-boot-starter (dev.samstevens.totp)
-- springdoc-openapi-ui (Swagger)
+- `dev.samstevens.totp` (TOTP/QR)
+- OpenAPI/Swagger UI
 
-## Requisitos
-- Java 11 o superior (se compiló y probó con Java 17)
-- Maven 3.8+
+### Seguridad y prácticas
+- Secreto TOTP cifrado con AES-GCM (IV aleatorio + tag de autenticación).
+- `username` único y validado.
+- Códigos de recuperación guardados con hash BCrypt; solo se muestran una vez al habilitar.
+- Endpoint de verificación de código de recuperación marca one-shot como usado.
+- Validación de entrada con Bean Validation y manejo global de errores.
+- Actuator con healthcheck para Docker.
 
-## Configuración rápida (dev)
-1. Variables de entorno recomendadas:
+### Requisitos locales
+- JDK 11+ y Maven 3.8+ (o usa Docker para construir/ejecutar)
+
+### Configuración (dev)
+Variables de entorno recomendadas:
 ```bash
-export ENCRYPTION_KEY='fP9uZ3sVq1Xb7DhK'  # 16 chars para AES-128
+set ENCRYPTION_KEY=pon_una_clave_secreta
 ```
-2. Configuración en `src/main/resources/application.properties` (ya incluida):
-```properties
-server.port=8081
-spring.datasource.url=jdbc:h2:mem:twofactorauth;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-spring.datasource.driverClassName=org.h2.Driver
-spring.datasource.username=sa
-spring.datasource.password=
-spring.jpa.hibernate.ddl-auto=update
-spring.h2.console.enabled=true
-spring.h2.console.path=/h2-console
-# Clave de cifrado (puede referenciar variable de entorno)
-encryption.key=${ENCRYPTION_KEY}
-```
+`src/main/resources/application.properties` ya está preparado para usar `ENCRYPTION_KEY` y levantar en 8080 con H2.
 
-## Construir y ejecutar
+### Construir y ejecutar (local)
 ```bash
 mvn clean package -DskipTests
 java -jar target/twofactorauth-0.0.1-SNAPSHOT.jar
 ```
-Por defecto expone la API en `http://localhost:8081`.
+API en `http://localhost:8080`.
 
-## Endpoints
-- POST `/api/2fa/enable` (application/json)
+### Docker
+```bash
+docker build -t twofactorauth:latest .
+docker run -e ENCRYPTION_KEY=tu_clave -p 8080:8080 twofactorauth:latest
+```
+Compose con PostgreSQL:
+```bash
+docker compose up -d
+```
+
+### Endpoints
+- POST `/api/2fa/enable`
   - Request: `{ "username": "usuario" }`
-  - Response: `{ "qrCode": "data:image/png;base64,...", "recoveryCodes": ["xxxx-....", ...] }`
-- POST `/api/2fa/verify` (application/json)
+  - Response: `{ "qrCode": "data:image/png;base64,...", "recoveryCodes": ["...", ...] }`
+- POST `/api/2fa/verify`
   - Request: `{ "username": "usuario", "code": "123456" }`
   - Response: `{ "verified": true|false }`
+- POST `/api/2fa/verify-recovery/{username}`
+  - Body (text/plain o JSON string): código de recuperación
+  - Response: `{ "verified": true|false }` y marca el código como usado si coincide
+- POST `/api/2fa/rotate/{username}`
+  - Regenera el secreto TOTP, devuelve nuevo `qrCode` y nuevos `recoveryCodes`. Útil para rotación periódica o compromisos.
+- POST `/api/2fa/disable/{username}`
+  - Inhabilita 2FA: elimina el secreto y limpia códigos de recuperación. Respuesta 204.
 
-## Probar con Postman
-1. POST `http://localhost:8081/api/2fa/enable`
-   - Headers: `Content-Type: application/json`
-   - Body: `{ "username": "demo" }`
-   - Copia el valor `qrCode` (data URI) y pégalo en el navegador para ver el QR, o usa Postman Visualizer:
-```js
-const data = pm.response.json();
-pm.visualizer.set(`
-  <div style="font-family: system-ui, sans-serif">
-    <h3>QR para escanear</h3>
-    <img src="{{qr}}" style="max-width: 280px; border:1px solid #ddd; padding:6px; border-radius:6px;" />
-  </div>
-`, { qr: data.qrCode });
+Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+H2 Console (dev): `http://localhost:8080/h2-console`
+Health: `http://localhost:8080/actuator/health`
+
+### Rate limiting
+- Los endpoints de verificación (`/verify` y `/verify-recovery/{username}`) tienen límite por `username` + IP (p. ej., 5 req/min). Si se supera, responde con 400/429.
+
+### Producción (sugerencias)
+- Usa PostgreSQL y desactiva H2/Swagger si no es necesario.
+- Gestiona `ENCRYPTION_KEY` en un secret manager.
+- Activa autenticación (p. ej., JWT) y CORS según tu caso. El `SecurityFilterChain` permite `/api/2fa/**` y `actuator/health` por defecto y deniega el resto.
+- Añade rate limiting por usuario/IP para `/verify` (base `Bucket4j` incluida).
+- Migraciones con Flyway/Liquibase; `ddl-auto=validate`.
+
+### Docker Compose (prod-like)
+1) En PowerShell (Windows), define la clave de cifrado para el contenedor:
+```powershell
+$env:ENCRYPTION_KEY = "pon_una_clave_segura"
 ```
-2. Escanea el QR en tu app TOTP (Google Authenticator, Authy, 1Password...).
-3. POST `http://localhost:8081/api/2fa/verify`
-   - Headers: `Content-Type: application/json`
-   - Body: `{ "username": "demo", "code": "123456" }` (usa el código actual de tu app)
-   - Debe devolver `{ "verified": true }` si es válido.
-
-## Swagger y H2 Console
-- Swagger UI: `http://localhost:8081/swagger-ui/index.html` (si está habilitado)
-- OpenAPI JSON: `http://localhost:8081/v3/api-docs`
-- H2 Console: `http://localhost:8081/h2-console` (JDBC URL `jdbc:h2:mem:twofactorauth`, user `sa`)
-
-## Seguridad
-- En desarrollo puedes dejar la seguridad desactivada (actualmente se excluyó la autoconfiguración). Para producción:
-  - Quita la exclusión de `SecurityAutoConfiguration` y define un `SecurityFilterChain` que permita `/api/2fa/**`, `/v3/api-docs/**`, `/swagger-ui/**` y proteja el resto.
-  - Configura CORS, CSRF según tus necesidades.
-  - No expongas la H2 console.
-
-## Persistencia y cifrado
-- El secreto TOTP se almacena cifrado (AES). La clave se inyecta desde `encryption.key`.
-- Los `recoveryCodes` se guardan cifrados en base de datos y se devuelven en claro solo al habilitar 2FA.
-- Cambiar `encryption.key` rompe el descifrado de secretos previos; planifica una rotación controlada si es necesario.
-
-## PostgreSQL (opcional prod)
-Ejemplo de propiedades:
-```properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/twofactorauth
-spring.datasource.username=twofa
-spring.datasource.password=tu_password
-spring.jpa.hibernate.ddl-auto=validate
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQL10Dialect
+2) Levanta servicios (app + PostgreSQL):
+```powershell
+docker compose up -d --build
 ```
-
-## Estructura del proyecto
-- `controller` → Endpoints REST
-- `service` → Lógica de negocio (TOTP, QR, cifrado)
-- `entity` → Entidades JPA (`User`, `RecoveryCode`)
-- `repository` → Repositorios Spring Data
-- `dto` → Modelos de request/response
-
-## Desarrollo
-- Formato/estilo: Java 11+, Lombok (`@Data`, etc.)
-- Ejecutar en caliente (opcional): `mvn spring-boot:run`
-
-## Notas
-- Mantén `ENCRYPTION_KEY` fuera del repositorio (variables de entorno/secret manager).
-- Considera añadir rate limiting y protección anti-brute force en `/verify`.
-- Para producción, añade auditoría/observabilidad (logs estructurados, métricas). 
-
-## Despliegue a producción (PostgreSQL)
-
-### 1) Preparar base de datos
-```bash
-sudo -u postgres psql -c "CREATE DATABASE twofactorauth;"
-sudo -u postgres psql -c "CREATE USER twofa WITH ENCRYPTED PASSWORD 'tu_password_segura';"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE twofactorauth TO twofa;"
+3) Verifica health:
+```powershell
+curl http://localhost:8080/actuator/health
 ```
+4) Prueba los endpoints (ver sección Postman o usa `curl`).
 
-### 2) Perfil de producción
-Crea `src/main/resources/application-prod.properties`:
-```properties
-server.port=8080
-
-spring.datasource.url=jdbc:postgresql://localhost:5432/twofactorauth
-spring.datasource.username=twofa
-spring.datasource.password=tu_password_segura
-spring.datasource.hikari.maximum-pool-size=10
-
-spring.jpa.hibernate.ddl-auto=validate
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQL10Dialect
-spring.jpa.open-in-view=false
-
-# Deshabilitar herramientas de dev
-spring.h2.console.enabled=false
-springdoc.api-docs.enabled=false
-springdoc.swagger-ui.enabled=false
-
-# Clave AES (no la hardcodees; usa secret/variable de entorno)
-encryption.key=${ENCRYPTION_KEY}
-```
-
-### 3) Seguridad mínima (recomendado)
-Crea `src/main/java/com/argy/twofactorauth/config/SecurityConfig.java`:
-```java
-package com.argy.twofactorauth.config;
-
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.web.SecurityFilterChain;
-
-@Configuration
-public class SecurityConfig {
-	@Bean
-	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-		http
-			.csrf().disable()
-			.authorizeRequests()
-			.antMatchers("/api/2fa/**").permitAll()
-			.anyRequest().denyAll();
-		return http.build();
-	}
-}
-```
-Ajusta las reglas según tus necesidades (CORS, CSRF, authn/authz, rate limiting, etc.).
-
-### 4) Construir artefacto
-```bash
-mvn clean package -DskipTests
-```
-
-### 5) Ejecutar con perfil prod
-```bash
-export SPRING_PROFILES_ACTIVE=prod
-export ENCRYPTION_KEY='cambia_esta_clave_de_16_chars'
-java -jar target/twofactorauth-0.0.1-SNAPSHOT.jar
-```
-
-### 6) Verificación rápida
-- POST `http://<host>:8080/api/2fa/enable` con `{ "username": "demo" }` → 200 y devuelve `qrCode`/`recoveryCodes`.
-- POST `http://<host>:8080/api/2fa/verify` con `{ "username": "demo", "code": "123456" }` → `{ "verified": true|false }`.
-
-### Recomendaciones de producción
-- Usa migraciones (Flyway/Liquibase) en lugar de `ddl-auto`.
-- Gestiona `ENCRYPTION_KEY` en un secret manager (no en archivos).
-- No expongas `/h2-console`; si usas Swagger en prod, protégelo.
-- Añade observabilidad (logs estructurados, métricas, tracing) y un proxy con HTTPS (Nginx/Caddy).
-- Backup/rotación de clave: cambiar `ENCRYPTION_KEY` invalida secretos previamente cifrados; planifica migración/rotación. 
+### Notas de diseño
+- AES-GCM protege confidencialidad e integridad de secretos.
+- Recovery codes hashed con BCrypt; verificación vía `matches`, nunca se re-muestran.
+- Respuestas de error consistentes via `@ControllerAdvice`.

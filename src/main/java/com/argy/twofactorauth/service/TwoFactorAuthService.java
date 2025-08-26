@@ -16,7 +16,6 @@ import com.argy.twofactorauth.entity.RecoveryCode;
 import com.argy.twofactorauth.entity.User;
 import com.argy.twofactorauth.repository.UserRepository;
 import dev.samstevens.totp.code.CodeVerifier;
-import dev.samstevens.totp.exceptions.QrGenerationException;
 import dev.samstevens.totp.qr.QrData;
 import dev.samstevens.totp.qr.QrDataFactory;
 import dev.samstevens.totp.qr.QrGenerator;
@@ -27,6 +26,8 @@ import dev.samstevens.totp.util.Utils;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Service
 public class TwoFactorAuthService {
@@ -38,8 +39,9 @@ public class TwoFactorAuthService {
 	private final CodeVerifier codeVerifier;
 	private final RecoveryCodeGenerator recoveryCodeGenerator;
 	private final EncryptionService encryptionService;
+	private final PasswordEncoder passwordEncoder;
 
-	public TwoFactorAuthService(UserRepository userRepository, SecretGenerator secretGenerator, QrDataFactory qrDataFactory, QrGenerator qrGenerator, CodeVerifier codeVerifier, RecoveryCodeGenerator recoveryCodeGenerator, EncryptionService encryptionService) {
+	public TwoFactorAuthService(UserRepository userRepository, SecretGenerator secretGenerator, QrDataFactory qrDataFactory, QrGenerator qrGenerator, CodeVerifier codeVerifier, RecoveryCodeGenerator recoveryCodeGenerator, EncryptionService encryptionService, PasswordEncoder passwordEncoder) {
 		this.userRepository = userRepository;
 		this.secretGenerator = secretGenerator;
 		this.qrDataFactory = qrDataFactory;
@@ -47,6 +49,7 @@ public class TwoFactorAuthService {
 		this.codeVerifier = codeVerifier;
 		this.recoveryCodeGenerator = recoveryCodeGenerator;
 		this.encryptionService = encryptionService;
+		this.passwordEncoder = passwordEncoder;
 	}
 
 	/**
@@ -55,6 +58,7 @@ public class TwoFactorAuthService {
 	 * @return data URI del QR y lista de códigos de recuperación en claro (solo en la respuesta)
 	 * @throws Exception en caso de errores de cifrado o generación de QR
 	 */
+	@Transactional
 	public Enable2FAResponse enable2FA(Enable2FARequest request) throws Exception {
 		String secret = secretGenerator.generate();
 		User foundUser = userRepository.findByUsername(request.getUsername());
@@ -77,11 +81,7 @@ public class TwoFactorAuthService {
 		user.setRecoveryCodes(Arrays.stream(recoveryCodes)
 			.map(code -> {
 				RecoveryCode rc = new RecoveryCode();
-				try {
-					rc.setCode(encryptionService.encrypt(code));
-				} catch (Exception e) {
-					throw new RuntimeException(e);
-				}
+				rc.setCodeHash(passwordEncoder.encode(code));
 				rc.setUser(userRef);
 				return rc;
 			}).collect(Collectors.toList()));

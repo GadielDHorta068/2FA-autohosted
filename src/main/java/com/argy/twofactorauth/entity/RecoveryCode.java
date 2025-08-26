@@ -1,6 +1,6 @@
 /**
  * Entidad de código de recuperación asociado a un usuario.
- * - code: valor cifrado
+ * - codeHash: hash del código (BCrypt)
  * - used: indicador de uso (no utilizado en endpoints actuales)
  */
 package com.argy.twofactorauth.entity;
@@ -17,7 +17,8 @@ public class RecoveryCode {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String code;
+    @Column(name = "code_hash", nullable = false, length = 100)
+    private String codeHash;
     private boolean used;
 
     @ManyToOne
